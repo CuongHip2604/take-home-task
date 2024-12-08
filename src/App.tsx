@@ -2,21 +2,20 @@ import { Line, LineConfig } from "@ant-design/charts";
 import { DownloadOutlined } from "@ant-design/icons";
 import { Col, Dropdown, MenuProps, message, Row, Spin, Typography } from "antd";
 import { NoticeType } from "antd/es/message/interface";
-import dayjs from "dayjs";
+import dayjs, { Dayjs } from "dayjs";
 import { unparse } from "papaparse";
 import { useMemo, useState } from "react";
 import {
-  AppDatePicker,
   AppDateRangePicker,
   AppSelect,
   DownloadPreviewModal,
 } from "./components";
 import {
-  useGetElectricityMeterByIdQuery,
   useGetElectricityMetersQuery,
   useGetHeadquartersQuery,
-  useGetRoomByIdQuery,
   useGetRoomsQuery,
+  useGetTimeSeriesByIdQuery,
+  useGetTimeSeriesQuery,
 } from "./hooks";
 import { IRoomData } from "./interfaces";
 import { delay } from "./utils";
@@ -45,12 +44,15 @@ function App() {
 
   const [headquarterId, setHeadquarterId] = useState<string | undefined>();
   const [roomId, setRoomId] = useState<string | undefined>();
+  const [timeSeriesId, setTimeSeriesId] = useState<string | undefined>();
+
   const [electricityMeterId, setElectricityMeterId] = useState<
     string | undefined
   >();
   const [isShowPreviewModal, setIsShowPreviewModal] = useState(false);
 
   const [isDownloading, setIsDownloading] = useState(false);
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
 
   const { headquarters, onPopupScroll, isFetching } = useGetHeadquartersQuery({
     query: {
@@ -73,8 +75,8 @@ function App() {
   });
   const {
     electricityMeters,
-    isFetching: isElectricityMetersFetching,
-    onPopupScroll: onElectricityMeterPopupScroll,
+    isFetching: isMeterFetching,
+    onPopupScroll: onMeterPopupScroll,
   } = useGetElectricityMetersQuery({
     query: {
       name: "",
@@ -84,13 +86,55 @@ function App() {
     },
   });
 
-  const { room, isFetching: isRoomDetailFetching } = useGetRoomByIdQuery({
-    id: roomId,
+  const {
+    timeSeries,
+    isFetching: isTimeSeriesFetching,
+    onPopupScroll: onTimeSeriesPopupScroll,
+  } = useGetTimeSeriesQuery({
+    query: {
+      ...(roomId && { roomId }),
+      ...(electricityMeterId && { electricityMeterId }),
+      name: "",
+      _page: 1,
+      _per_page: 10,
+    },
   });
-  const { electricityMeter, isFetching: isElectricityMeterDetailFetching } =
-    useGetElectricityMeterByIdQuery({
-      id: electricityMeterId,
+
+  const { timeSeriesDetail, isFetching: isTimeSeriesDetailFetching } =
+    useGetTimeSeriesByIdQuery({
+      id: timeSeriesId,
+      startDate: dateRange?.[0],
+      endDate: dateRange?.[1],
     });
+
+  const chartConfig: LineConfig = useMemo(
+    () => ({
+      data: {
+        value: timeSeriesDetail?.data || [],
+        transform: [
+          {
+            type: "fold",
+            fields: [
+              ...((roomId && ["temperature", "humidity"]) || []),
+              ...((electricityMeterId && ["energyConsumption", "cost"]) || []),
+            ],
+            key: "type",
+            value: "value",
+          },
+        ],
+      },
+      xField: (item: IRoomData) => {
+        return dayjs(item.timestamp).format("YYYY-MM-DD");
+      },
+      yField: "value",
+      colorField: "type",
+      axis: {
+        x: { labelAutoHide: "greedy" },
+      },
+      smooth: true,
+    }),
+    [timeSeriesDetail, roomId, electricityMeterId]
+  );
 
   const handleMenuClick: MenuProps["onClick"] = (e) => {
     switch (e.key) {
@@ -107,7 +151,7 @@ function App() {
   };
 
   const onDownloadCsvFile = async (success = true) => {
-    if (!room && !electricityMeter) return;
+    if (!timeSeriesDetail) return;
 
     try {
       setIsDownloading(true);
@@ -119,24 +163,15 @@ function App() {
 
       let csvContent = "";
 
-      if (room) {
-        const roomCSV = unparse(room.data, { header: true });
-        csvContent += `${room?.name}\n${roomCSV}\n\n`;
-      }
-
-      if (electricityMeter) {
-        const electricityMeterCSV = unparse(electricityMeter.data, {
-          header: true,
-        });
-        csvContent += `${electricityMeter.name}\n${electricityMeterCSV}`;
-      }
+      const timeseriesCSV = unparse(timeSeriesDetail.data, { header: true });
+      csvContent += `${timeSeriesDetail?.name}\n${timeseriesCSV}`;
 
       await delay(3000);
 
       await onDownloadFile(
         csvContent,
         "text/csv;charset=utf-8;",
-        "time-series-download.csv"
+        `${timeSeriesDetail.name}.csv`
       );
 
       onShowNotification(
@@ -152,7 +187,7 @@ function App() {
     }
   };
   const onDownloadJsonFile = async (success = true) => {
-    if (!room && !electricityMeter) return;
+    if (!timeSeriesDetail) return;
 
     try {
       setIsDownloading(true);
@@ -164,10 +199,7 @@ function App() {
 
       const jsonContent = JSON.stringify(
         {
-          ...(room?.data && { room: room?.data }),
-          ...(electricityMeter?.data && {
-            electricityMeter: electricityMeter?.data,
-          }),
+          ...timeSeriesDetail.data,
         },
         null,
         2
@@ -178,7 +210,7 @@ function App() {
       await onDownloadFile(
         jsonContent,
         "application/json",
-        "time-series-download.json"
+        `${timeSeriesDetail.name}.json`
       );
 
       onShowNotification(
@@ -214,57 +246,6 @@ function App() {
     setIsShowPreviewModal(false);
   };
 
-  const roomChartConfig: LineConfig = useMemo(
-    () => ({
-      data: {
-        value: room?.data,
-        transform: [
-          {
-            type: "fold",
-            fields: ["temperature", "humidity"],
-            key: "type",
-            value: "value",
-          },
-        ],
-      },
-      xField: (item: IRoomData) => {
-        return dayjs(item.timestamp).format("YYYY-MM-DD");
-      },
-      yField: "value",
-      colorField: "type",
-      axis: {
-        x: { labelAutoHide: "greedy" },
-      },
-      smooth: true,
-    }),
-    [room]
-  );
-
-  const electricityMeterChartConfig: LineConfig = useMemo(
-    () => ({
-      data: {
-        value: electricityMeter?.data,
-        transform: [
-          {
-            type: "fold",
-            fields: ["energyConsumption", "cost"],
-            key: "type",
-            value: "value",
-          },
-        ],
-      },
-      xField: (row: IRoomData) => {
-        return dayjs(row.timestamp).format("YYYY-MM-DD");
-      },
-      yField: "value",
-      colorField: "type",
-      axis: {
-        x: { labelAutoHide: "greedy" },
-      },
-    }),
-    [electricityMeter]
-  );
-
   const onShowNotification = (type: NoticeType, message: string) => {
     messageApi.open({
       content: message,
@@ -275,7 +256,7 @@ function App() {
   return (
     <div className="flex flex-col gap-6 py-6 px-8">
       <Row gutter={[24, 16]}>
-        <Col span={8}>
+        <Col span={6}>
           <AppSelect
             label="Select Headquarter"
             options={headquarters.map((hq) => ({
@@ -286,43 +267,76 @@ function App() {
             isFetching={isFetching}
             onChange={(value) => setHeadquarterId(value)}
             value={headquarterId}
+            placeholder="Select headquarter"
           />
         </Col>
-        <Col span={8}>
+        {!electricityMeterId && (
+          <Col span={6}>
+            <AppSelect
+              label="Select Room"
+              options={rooms.map((room) => ({
+                label: room.name,
+                value: room.id,
+              }))}
+              onChange={(value) => setRoomId(value)}
+              value={roomId}
+              isFetching={isRoomsFetching}
+              onPopupScroll={onRoomPopupScroll}
+              placeholder="Select room"
+            />
+          </Col>
+        )}
+        {!roomId && (
+          <Col span={6}>
+            <AppSelect
+              label="Select Electricity Meter"
+              options={electricityMeters.map((meter) => ({
+                label: meter.name,
+                value: meter.id,
+              }))}
+              onChange={(value) => setElectricityMeterId(value)}
+              value={electricityMeterId}
+              isFetching={isMeterFetching}
+              onPopupScroll={onMeterPopupScroll}
+              placeholder="Select electricity meter"
+            />
+          </Col>
+        )}
+        <Col span={6}>
           <AppSelect
-            label="Select Room"
-            options={rooms.map((room) => ({
-              label: room.name,
-              value: room.id,
+            label="Select Time Series"
+            options={timeSeries.map((e) => ({
+              label: e.name,
+              value: e.id,
             }))}
-            onChange={(value) => setRoomId(value)}
-            value={roomId}
-            isFetching={isRoomsFetching}
-            onPopupScroll={onRoomPopupScroll}
+            onChange={(value) => setTimeSeriesId(value)}
+            value={timeSeriesId}
+            isFetching={isTimeSeriesFetching}
+            onPopupScroll={onTimeSeriesPopupScroll}
+            placeholder="Select Time Series"
           />
         </Col>
-        <Col span={8}>
-          <AppSelect
-            label="Select Electricity Meter"
-            options={electricityMeters.map((meter) => ({
-              label: meter.name,
-              value: meter.id,
-            }))}
-            onChange={(value) => setElectricityMeterId(value)}
-            value={electricityMeterId}
-            isFetching={isElectricityMetersFetching}
-            onPopupScroll={onElectricityMeterPopupScroll}
-          />
-        </Col>
-        {(roomId || electricityMeterId) && (
+        {timeSeriesId && (
           <>
-            <Col span={8}>
-              <AppDatePicker label="Select Time Series" />
+            <Col span={6}>
+              <AppDateRangePicker
+                label="Select Date Range"
+                value={dateRange}
+                onChange={(date) => {
+                  setDateRange(date as [Dayjs, Dayjs] | null);
+                }}
+              />
             </Col>
-            <Col span={8}>
-              <AppDateRangePicker label="Select Date Range" />
-            </Col>
-            <Col span={8} className="mt-auto">
+          </>
+        )}
+      </Row>
+      {timeSeriesId && (
+        <Row>
+          <Col span={24}>
+            <div className="flex justify-between items-center">
+              <Typography.Title level={4}>
+                {timeSeriesDetail?.name}
+              </Typography.Title>
               <Dropdown.Button
                 menu={{
                   items,
@@ -336,35 +350,11 @@ function App() {
               >
                 Download
               </Dropdown.Button>
-            </Col>
-          </>
-        )}
-      </Row>
-      {roomId && (
-        <Row>
-          <Col span={24}>
-            <Typography.Title level={4}>{room?.name}</Typography.Title>
+            </div>
+
             <Line
-              {...roomChartConfig}
-              loading={isRoomDetailFetching}
-              loadingTemplate={
-                <div className="flex justify-center items-center">
-                  <Spin />
-                </div>
-              }
-            />
-          </Col>
-        </Row>
-      )}
-      {electricityMeterId && (
-        <Row>
-          <Col span={24}>
-            <Typography.Title level={4}>
-              {electricityMeter?.name}
-            </Typography.Title>
-            <Line
-              {...electricityMeterChartConfig}
-              loading={isElectricityMeterDetailFetching}
+              {...chartConfig}
+              loading={isTimeSeriesDetailFetching}
               loadingTemplate={
                 <div className="flex justify-center items-center">
                   <Spin />
@@ -376,13 +366,13 @@ function App() {
       )}
       <DownloadPreviewModal
         open={isShowPreviewModal}
-        electricityMeter={electricityMeter}
         centered
-        title="Time series downloaded"
-        room={room}
+        title={timeSeriesDetail?.name}
         onCancel={onClosePreviewModal}
         footer={null}
         width={600}
+        timeSeriesDetail={timeSeriesDetail}
+        type={roomId ? "room" : "electricityMeter"}
       />
       {contextHolder}
     </div>

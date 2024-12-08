@@ -1,122 +1,72 @@
-import { Modal, ModalProps, Table, TableProps, Tabs, TabsProps } from "antd";
+import { Modal, ModalProps, Table, TableProps } from "antd";
 import dayjs from "dayjs";
-import { useEffect, useMemo, useState } from "react";
-import {
-  IElectricityMeter,
-  IElectricityMeterData,
-  IRoom,
-  IRoomData,
-} from "../interfaces";
+import { useMemo } from "react";
+import { ITimeSeries, ITimestampData } from "../interfaces";
 
 interface Props extends ModalProps {
-  room?: IRoom;
-  electricityMeter?: IElectricityMeter;
+  timeSeriesDetail?: ITimeSeries;
+  type: "room" | "electricityMeter";
 }
 
-const DownloadPreviewModal = ({ room, electricityMeter, ...rest }: Props) => {
-  const [activeTab, setActiveTab] = useState("");
-
-  const { columns: roomColumns, dataSource: roomDataSource } = useMemo(() => {
-    if (!room)
+const DownloadPreviewModal = ({ timeSeriesDetail, type, ...rest }: Props) => {
+  const { columns, dataSource } = useMemo(() => {
+    if (!timeSeriesDetail)
       return {
         columns: [],
         dataSource: [],
       };
 
-    const columns: TableProps<IRoomData>["columns"] = [
+    const columns: TableProps<ITimestampData>["columns"] = [
       {
         title: "Timestamp",
         dataIndex: "timestamp",
         key: "timestamp",
         render: (timestamp: string) => dayjs(timestamp).format("YYYY-MM-DD"),
       },
-      {
-        title: "Temperature",
-        dataIndex: "temperature",
-        key: "temperature",
-        align: "center",
-      },
-      {
-        title: "Humidity",
-        dataIndex: "humidity",
-        key: "humidity",
-        align: "center",
-      },
+      ...((type === "room" &&
+        ([
+          {
+            title: "Temperature",
+            dataIndex: "temperature",
+            key: "temperature",
+            align: "center",
+          },
+          {
+            title: "Humidity",
+            dataIndex: "humidity",
+            key: "humidity",
+            align: "center",
+          },
+        ] as TableProps<ITimestampData>["columns"])) ||
+        []),
+      ...((type === "electricityMeter" &&
+        ([
+          {
+            title: "Energy consumption",
+            dataIndex: "energyConsumption",
+            key: "energyConsumption",
+            align: "center",
+          },
+          {
+            title: "Cost",
+            dataIndex: "cost",
+            key: "cost",
+            align: "center",
+          },
+        ] as TableProps<ITimestampData>["columns"])) ||
+        []),
     ];
     return {
       columns,
-      dataSource: room.data,
+      dataSource: timeSeriesDetail.data,
     };
-  }, [room]);
-  const {
-    columns: electricityMeterColumns,
-    dataSource: electricityMeterDataSource,
-  } = useMemo(() => {
-    if (!electricityMeter)
-      return {
-        columns: [],
-        dataSource: [],
-      };
-
-    const columns: TableProps<IElectricityMeterData>["columns"] = [
-      {
-        title: "Timestamp",
-        dataIndex: "timestamp",
-        key: "timestamp",
-        render: (timestamp: string) => dayjs(timestamp).format("YYYY-MM-DD"),
-      },
-      {
-        title: "Energy Consumption",
-        dataIndex: "energyConsumption",
-        key: "energyConsumption",
-        align: "center",
-      },
-      {
-        title: "Cost",
-        dataIndex: "cost",
-        key: "cost",
-        align: "center",
-      },
-    ];
-    return {
-      columns,
-      dataSource: electricityMeter.data,
-    };
-  }, [electricityMeter]);
-
-  const items: TabsProps["items"] = [
-    {
-      key: "room",
-      label: room?.name,
-      children: <Table dataSource={roomDataSource} columns={roomColumns} />,
-    },
-    {
-      key: "electricityMeter",
-      label: electricityMeter?.name,
-      children: (
-        <Table
-          dataSource={electricityMeterDataSource}
-          columns={electricityMeterColumns}
-        />
-      ),
-    },
-  ];
-
-  const onTabChange: TabsProps["onChange"] = (key) => {
-    setActiveTab(key);
-  };
-
-  useEffect(() => {
-    if (room && !electricityMeter) {
-      setActiveTab("room");
-    } else if (!room && electricityMeter) {
-      setActiveTab("electricityMeter");
-    }
-  }, [room, electricityMeter]);
+  }, [timeSeriesDetail]);
 
   return (
     <Modal {...rest}>
-      <Tabs activeKey={activeTab} items={items} onChange={onTabChange} />
+      <div className="flex flex-col gap-4">
+        <Table dataSource={dataSource} columns={columns} />
+      </div>
     </Modal>
   );
 };

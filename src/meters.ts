@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
-import { headquarters } from "./db/db.json";
+import { headquarters, rooms } from "./db/db.json";
+
+console.log("rooms", rooms);
 
 // Function to generate random meter name
 const generateMeterName = (): string => {
@@ -30,44 +32,34 @@ const generateMeterData = (
 };
 
 // Function to generate meter data with the desired format
-const generateMeter = (
-  headquarterId: string,
-  numDataEntries: number
-): object => {
+const generateMeter = (headquarterId: string): object => {
   const meterId = uuidv4(); // Generate unique meter ID
   const meterName = generateMeterName(); // Generate meter name
-  const data = generateMeterData(numDataEntries); // Generate meter data with multiple entries
+
+  const createdAt = new Date(
+    Date.now() - Math.floor(Math.random() * 10000000000)
+  ).toISOString(); // Random createdAt timestamp
 
   return {
     id: meterId,
     headquarterId,
     name: meterName,
-    data: data,
+    createdAt,
   };
 };
 
 // Example: Generate meters for a given headquarterId
-const generateRandomMeters = (
-  headquarterId: string,
-  numMeters: number,
-  numDataEntries: number
-) => {
+const generateRandomMeters = (headquarterId: string, numMeters: number) => {
   const meters = [];
   for (let i = 0; i < numMeters; i++) {
-    meters.push(generateMeter(headquarterId, numDataEntries));
+    meters.push(generateMeter(headquarterId));
   }
   return meters;
 };
 
 // Example usage
 const meters = headquarters
-  .map((hq) =>
-    generateRandomMeters(
-      hq.id,
-      Math.floor(Math.random() * 20),
-      Math.floor(Math.random() * 30)
-    )
-  )
+  .map((hq) => generateRandomMeters(hq.id, Math.floor(Math.random() * 5)))
   .flatMap((meter) => meter); // Generate 5 meters for this HQ, each with 2 data entries
 
 console.log("meters", meters); // Pretty print the result

@@ -19,6 +19,10 @@ export const ApiService = {
     await delay(3000);
     return axiosClient.get("/electricityMeters", { params: query });
   },
+  getTimeSeries: async (query: IRoomQuery) => {
+    await delay(3000);
+    return axiosClient.get("/timeSeries", { params: query });
+  },
   getRoomById: async (id?: string) => {
     await delay(3000);
     return axiosClient.get(`/rooms/${id}`);
@@ -26,5 +30,9 @@ export const ApiService = {
   getElectricityMeterById: async (id?: string) => {
     await delay(3000);
     return axiosClient.get(`/electricityMeters/${id}`);
+  },
+  getTimeSeriesById: async (id?: string) => {
+    await delay(3000);
+    return axiosClient.get(`/timeSeries/${id}`);
   },
 };

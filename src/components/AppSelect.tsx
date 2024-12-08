@@ -15,12 +15,7 @@ const AppSelect = ({
   return (
     <div className="flex flex-col gap-1">
       <label>{label}</label>
-      <Select
-        className="w-full"
-        placeholder="Select Headquarter"
-        onPopupScroll={onPopupScroll}
-        {...rest}
-      >
+      <Select className="w-full" onPopupScroll={onPopupScroll} {...rest}>
         {options?.map((option) => (
           <Select.Option key={option.value} value={option.value}>
             {option.label}
