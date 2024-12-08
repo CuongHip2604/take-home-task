@@ -12,8 +12,9 @@ const useGetRoomsQuery = ({ query }: Props) => {
   const { data, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage } =
     useInfiniteQuery<AxiosResponse<IGetRoomsResponse>>({
       queryKey: ["QK_GET_ROOMS", query],
-      queryFn: () => ApiService.getRooms(query),
-      initialPageParam: 0,
+      queryFn: (props) =>
+        ApiService.getRooms({ ...query, _page: props.pageParam as number }),
+      initialPageParam: query._page,
       getNextPageParam: (lastPage) => {
         return lastPage.data.next;
       },

@@ -1,4 +1,4 @@
-import { Select, SelectProps } from "antd";
+import { Select, SelectProps, Spin } from "antd";
 
 interface Props extends SelectProps {
   label: string;
@@ -29,7 +29,9 @@ const AppSelect = ({
 
         {isFetching && (
           <Select.Option disabled={true} value="loading">
-            Loading...
+            <div className="flex justify-center items-center">
+              <Spin />
+            </div>
           </Select.Option>
         )}
       </Select>

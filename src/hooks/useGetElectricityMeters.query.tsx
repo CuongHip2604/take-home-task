@@ -15,8 +15,12 @@ const useGetElectricityMetersQuery = ({ query }: Props) => {
   const { data, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage } =
     useInfiniteQuery<AxiosResponse<IGetElectricityMetersResponse>>({
       queryKey: ["QK_GET_ELECTRICITY_METERS", query],
-      queryFn: () => ApiService.getElectricityMeters(query),
-      initialPageParam: 0,
+      queryFn: (props) =>
+        ApiService.getElectricityMeters({
+          ...query,
+          _page: props.pageParam as number,
+        }),
+      initialPageParam: query._page,
       getNextPageParam: (lastPage) => {
         return lastPage.data.next;
       },

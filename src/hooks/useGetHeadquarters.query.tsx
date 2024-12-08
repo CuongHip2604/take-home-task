@@ -19,8 +19,13 @@ const useGetHeadquartersQuery = ({ query }: Props) => {
     // status,
   } = useInfiniteQuery<AxiosResponse<IGetHeadquartersResponse>>({
     queryKey: ["QK_GET_HEADQUARTERS", query],
-    queryFn: () => ApiService.getHeadquarters(query),
-    initialPageParam: 0,
+    queryFn: (props) => {
+      return ApiService.getHeadquarters({
+        ...query,
+        _page: props.pageParam as number,
+      });
+    },
+    initialPageParam: query._page,
     getNextPageParam: (lastPage) => {
       return lastPage.data.next;
     },

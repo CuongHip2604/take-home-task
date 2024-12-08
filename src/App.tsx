@@ -1,15 +1,6 @@
 import { Line, LineConfig } from "@ant-design/charts";
 import { DownloadOutlined } from "@ant-design/icons";
-import {
-  Col,
-  Dropdown,
-  MenuProps,
-  message,
-  Radio,
-  RadioChangeEvent,
-  Row,
-  Typography,
-} from "antd";
+import { Col, Dropdown, MenuProps, message, Row, Spin, Typography } from "antd";
 import { NoticeType } from "antd/es/message/interface";
 import dayjs from "dayjs";
 import { unparse } from "papaparse";
@@ -39,6 +30,14 @@ const items: MenuProps["items"] = [
     key: "json",
     label: "Download JSON file",
   },
+  {
+    key: "csv-fail",
+    label: "Download CSV file (fail)",
+  },
+  {
+    key: "json-fail",
+    label: "Download JSON file (fail)",
+  },
 ];
 
 function App() {
@@ -50,8 +49,7 @@ function App() {
     string | undefined
   >();
   const [isShowPreviewModal, setIsShowPreviewModal] = useState(false);
-  const [resultDownloadType, setResultDownloadType] =
-    useState<string>("success");
+
   const [isDownloading, setIsDownloading] = useState(false);
 
   const { headquarters, onPopupScroll, isFetching } = useGetHeadquartersQuery({
@@ -61,7 +59,11 @@ function App() {
       _per_page: 10,
     },
   });
-  const { rooms } = useGetRoomsQuery({
+  const {
+    rooms,
+    isFetching: isRoomsFetching,
+    onPopupScroll: onRoomPopupScroll,
+  } = useGetRoomsQuery({
     query: {
       name: "",
       _page: 1,
@@ -69,7 +71,11 @@ function App() {
       headquarterId: headquarterId,
     },
   });
-  const { electricityMeters } = useGetElectricityMetersQuery({
+  const {
+    electricityMeters,
+    isFetching: isElectricityMetersFetching,
+    onPopupScroll: onElectricityMeterPopupScroll,
+  } = useGetElectricityMetersQuery({
     query: {
       name: "",
       _page: 1,
@@ -78,28 +84,35 @@ function App() {
     },
   });
 
-  const { room } = useGetRoomByIdQuery({
+  const { room, isFetching: isRoomDetailFetching } = useGetRoomByIdQuery({
     id: roomId,
   });
-  const { electricityMeter } = useGetElectricityMeterByIdQuery({
-    id: electricityMeterId,
-  });
+  const { electricityMeter, isFetching: isElectricityMeterDetailFetching } =
+    useGetElectricityMeterByIdQuery({
+      id: electricityMeterId,
+    });
 
   const handleMenuClick: MenuProps["onClick"] = (e) => {
-    if (e.key === "csv") {
-      return onDownloadCsvFile();
-    }
+    switch (e.key) {
+      case "csv":
+        return onDownloadCsvFile();
+      case "json":
+        return onDownloadJsonFile();
+      case "json-fail":
+        return onDownloadJsonFile(false);
 
-    return onDownloadJsonFile();
+      default:
+        return onDownloadCsvFile(false);
+    }
   };
 
-  const onDownloadCsvFile = async () => {
+  const onDownloadCsvFile = async (success = true) => {
     if (!room && !electricityMeter) return;
 
     try {
       setIsDownloading(true);
 
-      if (resultDownloadType === "fail") {
+      if (!success) {
         await delay(3000);
         throw new Error("Download CSV file failed");
       }
@@ -138,13 +151,13 @@ function App() {
       setIsDownloading(false);
     }
   };
-  const onDownloadJsonFile = async () => {
+  const onDownloadJsonFile = async (success = true) => {
     if (!room && !electricityMeter) return;
 
     try {
       setIsDownloading(true);
 
-      if (resultDownloadType === "fail") {
+      if (!success) {
         await delay(3000);
         throw new Error("Download JSON file failed");
       }
@@ -199,10 +212,6 @@ function App() {
   };
   const onClosePreviewModal = () => {
     setIsShowPreviewModal(false);
-  };
-
-  const onChangeResultDownloadType = (e: RadioChangeEvent) => {
-    setResultDownloadType(e.target.value);
   };
 
   const roomChartConfig: LineConfig = useMemo(
@@ -288,6 +297,8 @@ function App() {
             }))}
             onChange={(value) => setRoomId(value)}
             value={roomId}
+            isFetching={isRoomsFetching}
+            onPopupScroll={onRoomPopupScroll}
           />
         </Col>
         <Col span={8}>
@@ -299,9 +310,11 @@ function App() {
             }))}
             onChange={(value) => setElectricityMeterId(value)}
             value={electricityMeterId}
+            isFetching={isElectricityMetersFetching}
+            onPopupScroll={onElectricityMeterPopupScroll}
           />
         </Col>
-        {(room || electricityMeter) && (
+        {(roomId || electricityMeterId) && (
           <>
             <Col span={8}>
               <AppDatePicker label="Select Time Series" />
@@ -310,13 +323,6 @@ function App() {
               <AppDateRangePicker label="Select Date Range" />
             </Col>
             <Col span={8} className="mt-auto">
-              <Radio.Group
-                onChange={onChangeResultDownloadType}
-                value={resultDownloadType}
-              >
-                <Radio value="success">Download success</Radio>
-                <Radio value="fail">Download fail</Radio>
-              </Radio.Group>
               <Dropdown.Button
                 menu={{
                   items,
@@ -326,6 +332,7 @@ function App() {
                 trigger={["click"]}
                 icon={<DownloadOutlined />}
                 loading={isDownloading}
+                className="flex-none w-auto"
               >
                 Download
               </Dropdown.Button>
@@ -333,21 +340,37 @@ function App() {
           </>
         )}
       </Row>
-      {room && (
+      {roomId && (
         <Row>
           <Col span={24}>
-            <Typography.Title level={4}>{room.name}</Typography.Title>
-            <Line {...roomChartConfig} />
+            <Typography.Title level={4}>{room?.name}</Typography.Title>
+            <Line
+              {...roomChartConfig}
+              loading={isRoomDetailFetching}
+              loadingTemplate={
+                <div className="flex justify-center items-center">
+                  <Spin />
+                </div>
+              }
+            />
           </Col>
         </Row>
       )}
-      {electricityMeter && (
+      {electricityMeterId && (
         <Row>
           <Col span={24}>
             <Typography.Title level={4}>
-              {electricityMeter.name}
+              {electricityMeter?.name}
             </Typography.Title>
-            <Line {...electricityMeterChartConfig} />
+            <Line
+              {...electricityMeterChartConfig}
+              loading={isElectricityMeterDetailFetching}
+              loadingTemplate={
+                <div className="flex justify-center items-center">
+                  <Spin />
+                </div>
+              }
+            />
           </Col>
         </Row>
       )}
